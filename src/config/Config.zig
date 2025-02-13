@@ -317,14 +317,14 @@ pub const renamed = std.StaticStringMap([]const u8).initComptime(&.{
 /// See the notes about adjustments in `adjust-cell-width`.
 @"adjust-underline-thickness": ?MetricModifier = null,
 /// Distance in pixels or percentage adjustment from the top of the cell to the top of the strikethrough.
-/// Increase to move strikethrough DOWN, decrease to move underline UP.
+/// Increase to move strikethrough DOWN, decrease to move strikethrough UP.
 /// See the notes about adjustments in `adjust-cell-width`.
 @"adjust-strikethrough-position": ?MetricModifier = null,
 /// Thickness in pixels or percentage adjustment of the strikethrough.
 /// See the notes about adjustments in `adjust-cell-width`.
 @"adjust-strikethrough-thickness": ?MetricModifier = null,
 /// Distance in pixels or percentage adjustment from the top of the cell to the top of the overline.
-/// Increase to move overline DOWN, decrease to move underline UP.
+/// Increase to move overline DOWN, decrease to move overline UP.
 /// See the notes about adjustments in `adjust-cell-width`.
 @"adjust-overline-position": ?MetricModifier = null,
 /// Thickness in pixels or percentage adjustment of the overline.
@@ -1157,9 +1157,9 @@ keybind: Keybinds = .{},
 ///   * `client` - Prefer client-side decorations.
 ///
 ///   * `server` - Prefer server-side decorations. This is only relevant
-///     on Linux with GTK. This currently only works on Linux with Wayland
-///     and the `org_kde_kwin_server_decoration` protocol available (e.g.
-///     KDE Plasma, but almost any non-GNOME desktop supports this protocol).
+///     on Linux with GTK, either on X11, or Wayland on a compositor that
+///     supports the `org_kde_kwin_server_decoration` protocol (e.g. KDE Plasma,
+///     but almost any non-GNOME desktop supports this protocol).
 ///
 ///     If `server` is set but the environment doesn't support server-side
 ///     decorations, client-side decorations will be used instead.
@@ -1972,6 +1972,9 @@ keybind: Keybinds = .{},
 /// Valid values:
 ///
 ///  * `official` - Use the official Ghostty icon.
+///  * `blueprint`, `chalkboard`, `microchip`, `glass`, `holographic`,
+///    `paper`, `retro`, `xray` - Official variants of the Ghostty icon
+///    hand-created by artists (no AI).
 ///  * `custom-style` - Use the official Ghostty icon but with custom
 ///    styles applied to various layers. The custom styles must be
 ///    specified using the additional `macos-icon`-prefixed configurations.
@@ -5719,6 +5722,14 @@ pub const MacTitlebarProxyIcon = enum {
 /// format at all.
 pub const MacAppIcon = enum {
     official,
+    blueprint,
+    chalkboard,
+    microchip,
+    glass,
+    holographic,
+    paper,
+    retro,
+    xray,
     @"custom-style",
 };
 

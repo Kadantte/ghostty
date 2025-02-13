@@ -236,9 +236,9 @@ pub const Action = union(enum) {
     /// Send an `ESC` sequence.
     esc: []const u8,
 
-    // Send the given text. Uses Zig string literal syntax. This is currently
-    // not validated. If the text is invalid (i.e. contains an invalid escape
-    // sequence), the error will currently only show up in logs.
+    /// Send the given text. Uses Zig string literal syntax. This is currently
+    /// not validated. If the text is invalid (i.e. contains an invalid escape
+    /// sequence), the error will currently only show up in logs.
     text: []const u8,
 
     /// Send data to the pty depending on whether cursor key mode is enabled
@@ -469,6 +469,8 @@ pub const Action = union(enum) {
     /// Show/hide all windows. If all windows become shown, we also ensure
     /// Ghostty becomes focused. When hiding all windows, focus is yielded
     /// to the next application as determined by the OS.
+    ///
+    /// Note: When the focused surface is fullscreen, this method does nothing.
     ///
     /// This currently only works on macOS.
     toggle_visibility: void,

@@ -12,6 +12,7 @@ const objc = @import("objc");
 const apprt = @import("../apprt.zig");
 const font = @import("../font/main.zig");
 const input = @import("../input.zig");
+const internal_os = @import("../os/main.zig");
 const renderer = @import("../renderer.zig");
 const terminal = @import("../terminal/main.zig");
 const CoreApp = @import("../App.zig");
@@ -45,7 +46,7 @@ pub const App = struct {
         wakeup: *const fn (AppUD) callconv(.C) void,
 
         /// Callback called to handle an action.
-        action: *const fn (*App, apprt.Target.C, apprt.Action.C) callconv(.C) void,
+        action: *const fn (*App, apprt.Target.C, apprt.Action.C) callconv(.C) bool,
 
         /// Read the clipboard value. The return value must be preserved
         /// by the host until the next call. If there is no valid clipboard
@@ -237,6 +238,14 @@ pub const App = struct {
                 @intCast(keycode),
                 translate_mods,
             );
+
+            // TODO(mitchellh): I think we can get rid of the above keymap
+            // translation code completely and defer to AppKit/Swift
+            // (for macOS) for handling all translations. The translation
+            // within libghostty is an artifact of an earlier design and
+            // it is buggy (see #5558). We should move closer to a GTK-style
+            // model of tracking composing states and preedit in the apprt
+            // and not in libghostty.
 
             // If this is a dead key, then we're composing a character and
             // we need to set our proper preedit state if we're targeting a
@@ -469,13 +478,14 @@ pub const App = struct {
         surface.queueInspectorRender();
     }
 
-    /// Perform a given action.
+    /// Perform a given action. Returns `true` if the action was able to be
+    /// performed, `false` otherwise.
     pub fn performAction(
         self: *App,
         target: apprt.Target,
         comptime action: apprt.Action.Key,
         value: apprt.Action.Value(action),
-    ) !void {
+    ) !bool {
         // Special case certain actions before they are sent to the
         // embedded apprt.
         self.performPreAction(target, action, value);
@@ -485,7 +495,7 @@ pub const App = struct {
             action,
             value,
         });
-        self.opts.action(
+        return self.opts.action(
             self,
             target.cval(),
             @unionInit(apprt.Action, @tagName(action), value).cval(),
@@ -997,7 +1007,7 @@ pub const Surface = struct {
     }
 
     fn queueInspectorRender(self: *Surface) void {
-        self.app.performAction(
+        _ = self.app.performAction(
             .{ .surface = &self.core_surface },
             .render_inspector,
             {},
@@ -1016,6 +1026,30 @@ pub const Surface = struct {
         return .{
             .font_size = font_size,
         };
+    }
+
+    pub fn defaultTermioEnv(self: *const Surface) !?std.process.EnvMap {
+        const alloc = self.app.core_app.alloc;
+        var env = try internal_os.getEnvMap(alloc);
+        errdefer env.deinit();
+
+        if (comptime builtin.target.isDarwin()) {
+            if (env.get("__XCODE_BUILT_PRODUCTS_DIR_PATHS") != null) {
+                env.remove("__XCODE_BUILT_PRODUCTS_DIR_PATHS");
+                env.remove("__XPC_DYLD_LIBRARY_PATH");
+                env.remove("DYLD_FRAMEWORK_PATH");
+                env.remove("DYLD_INSERT_LIBRARIES");
+                env.remove("DYLD_LIBRARY_PATH");
+                env.remove("LD_LIBRARY_PATH");
+                env.remove("SECURITYSESSIONID");
+                env.remove("XPC_SERVICE_NAME");
+            }
+
+            // Remove this so that running `ghostty` within Ghostty works.
+            env.remove("GHOSTTY_MAC_APP");
+        }
+
+        return env;
     }
 
     /// The cursor position from the host directly is in screen coordinates but
@@ -1424,7 +1458,7 @@ pub const CAPI = struct {
 
     /// Open the configuration.
     export fn ghostty_app_open_config(v: *App) void {
-        v.performAction(.app, .open_config, {}) catch |err| {
+        _ = v.performAction(.app, .open_config, {}) catch |err| {
             log.err("error reloading config err={}", .{err});
             return;
         };
@@ -1652,7 +1686,12 @@ pub const CAPI = struct {
         event: KeyEvent,
     ) bool {
         const core_event = surface.app.coreKeyEvent(
-            .{ .surface = surface },
+            // Note: this "app" target here looks like a bug, but it is
+            // intentional. coreKeyEvent uses the target only as a way to
+            // trigger preedit callbacks for keymap translation and we don't
+            // want to trigger that here. See the todo item in coreKeyEvent
+            // for a long term solution to this and removing target altogether.
+            .app,
             event.keyEvent(),
         ) catch |err| {
             log.warn("error processing key event err={}", .{err});
@@ -1762,7 +1801,7 @@ pub const CAPI = struct {
 
     /// Request that the surface split in the given direction.
     export fn ghostty_surface_split(ptr: *Surface, direction: apprt.action.SplitDirection) void {
-        ptr.app.performAction(
+        _ = ptr.app.performAction(
             .{ .surface = &ptr.core_surface },
             .new_split,
             direction,
@@ -1777,7 +1816,7 @@ pub const CAPI = struct {
         ptr: *Surface,
         direction: apprt.action.GotoSplit,
     ) void {
-        ptr.app.performAction(
+        _ = ptr.app.performAction(
             .{ .surface = &ptr.core_surface },
             .goto_split,
             direction,
@@ -1796,7 +1835,7 @@ pub const CAPI = struct {
         direction: apprt.action.ResizeSplit.Direction,
         amount: u16,
     ) void {
-        ptr.app.performAction(
+        _ = ptr.app.performAction(
             .{ .surface = &ptr.core_surface },
             .resize_split,
             .{ .direction = direction, .amount = amount },
@@ -1808,7 +1847,7 @@ pub const CAPI = struct {
 
     /// Equalize the size of all splits in the current window.
     export fn ghostty_surface_split_equalize(ptr: *Surface) void {
-        ptr.app.performAction(
+        _ = ptr.app.performAction(
             .{ .surface = &ptr.core_surface },
             .equalize_splits,
             {},

@@ -506,23 +506,25 @@ pub fn closeTab(self: *Window, tab: *Tab) void {
 }
 
 /// Go to the previous tab for a surface.
-pub fn gotoPreviousTab(self: *Window, surface: *Surface) void {
+pub fn gotoPreviousTab(self: *Window, surface: *Surface) bool {
     const tab = surface.container.tab() orelse {
         log.info("surface is not attached to a tab bar, cannot navigate", .{});
-        return;
+        return false;
     };
-    self.notebook.gotoPreviousTab(tab);
+    if (!self.notebook.gotoPreviousTab(tab)) return false;
     self.focusCurrentTab();
+    return true;
 }
 
 /// Go to the next tab for a surface.
-pub fn gotoNextTab(self: *Window, surface: *Surface) void {
+pub fn gotoNextTab(self: *Window, surface: *Surface) bool {
     const tab = surface.container.tab() orelse {
         log.info("surface is not attached to a tab bar, cannot navigate", .{});
-        return;
+        return false;
     };
-    self.notebook.gotoNextTab(tab);
+    if (!self.notebook.gotoNextTab(tab)) return false;
     self.focusCurrentTab();
+    return true;
 }
 
 /// Move the current tab for a surface.
@@ -535,19 +537,20 @@ pub fn moveTab(self: *Window, surface: *Surface, position: c_int) void {
 }
 
 /// Go to the last tab for a surface.
-pub fn gotoLastTab(self: *Window) void {
+pub fn gotoLastTab(self: *Window) bool {
     const max = self.notebook.nPages();
-    self.gotoTab(@intCast(max));
+    return self.gotoTab(@intCast(max));
 }
 
 /// Go to the specific tab index.
-pub fn gotoTab(self: *Window, n: usize) void {
-    if (n == 0) return;
+pub fn gotoTab(self: *Window, n: usize) bool {
+    if (n == 0) return false;
     const max = self.notebook.nPages();
-    if (max == 0) return;
-    const page_idx = std.math.cast(c_int, n - 1) orelse return;
-    self.notebook.gotoNthTab(@min(page_idx, max - 1));
+    if (max == 0) return false;
+    const page_idx = std.math.cast(c_int, n - 1) orelse return false;
+    if (!self.notebook.gotoNthTab(@min(page_idx, max - 1))) return false;
     self.focusCurrentTab();
+    return true;
 }
 
 /// Toggle tab overview (if present)
@@ -658,16 +661,23 @@ fn gtkWindowNotifyMaximized(
 fn gtkWindowNotifyDecorated(
     object: *c.GObject,
     _: *c.GParamSpec,
-    _: ?*anyopaque,
+    ud: ?*anyopaque,
 ) callconv(.C) void {
+    const self = userdataSelf(ud orelse return);
     const is_decorated = c.gtk_window_get_decorated(@ptrCast(object)) == 1;
 
     // Fix any artifacting that may occur in window corners. The .ssd CSS
     // class is defined in the GtkWindow documentation:
     // https://docs.gtk.org/gtk4/class.Window.html#css-nodes. A definition
     // for .ssd is provided by GTK and Adwaita.
+    toggleCssClass(@ptrCast(object), "csd", is_decorated);
     toggleCssClass(@ptrCast(object), "ssd", !is_decorated);
     toggleCssClass(@ptrCast(object), "no-border-radius", !is_decorated);
+
+    // FIXME: This is to update the blur region offset on X11.
+    // Remove this when we move everything related to window appearance
+    // to `syncAppearance` for Ghostty 1.2.
+    self.winproto.syncAppearance() catch {};
 }
 
 fn gtkWindowNotifyFullscreened(
